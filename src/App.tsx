@@ -15,6 +15,7 @@ export default function App() {
             <a href={paths()}>Home</a>
             <a href={paths.users()}>Users</a>
             <a href={paths.about()}>About</a>
+            <a href={paths.action()}>Action</a>
           </nav>
           <Loading fallback={<main>Loading…</main>}>{props.children}</Loading>
         </>

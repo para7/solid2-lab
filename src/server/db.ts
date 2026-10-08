@@ -27,3 +27,28 @@ export function updateUser(id: string, data: Partial<User>) {
   const user = users.get(id);
   if (user) users.set(id, { ...user, ...data });
 }
+
+export interface Todo {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
+const todos = new Map<string, Todo>();
+
+export function listTodos() {
+  return Array.from(todos.values());
+}
+
+export function insertTodo(todo: Todo) {
+  todos.set(todo.id, todo);
+}
+
+export function updateTodo(id: string, data: Partial<Todo>) {
+  const todo = todos.get(id);
+  if (todo) todos.set(id, { ...todo, ...data });
+}
+
+export function deleteTodo(id: string) {
+  todos.delete(id);
+}
