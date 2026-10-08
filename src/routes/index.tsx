@@ -59,6 +59,7 @@ export default function Home() {
       >
         Learn Solid
       </a>
+      <div>{new Date().toLocaleString()}</div>
     </main>
   );
 }

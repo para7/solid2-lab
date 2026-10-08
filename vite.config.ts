@@ -2,19 +2,17 @@ import { fileURLToPath } from 'node:url';
 import { fileRoutes } from 'filesystem-routing/vite';
 import { defineConfig } from 'vitest/config';
 import solid from '@solidjs/vite-plugin';
+import { nitro } from 'nitro/vite';
 
 export default defineConfig({
   // Turnkey streaming SSR: no index.html and no entry files — the plugin
   // generates the entries around src/App.tsx, wrapped in src/Document.tsx.
-  // `vite build` emits client assets to dist/client and the request handler
-  // to dist/server, plus the Node server (dist/server/node.js) `npm start` runs.
+  // Nitro wraps the plugin's request handler: `vite build` emits .output/
+  // (`npm start` runs .output/server/index.mjs) and prerenders listed routes.
   plugins: [
     solid({
       start: {
         middleware: './src/middleware.ts',
-        // Emit dist/server/node.js: a ready-to-run Node server (static
-        // assets + the handler). Other platforms import dist/server/server.js.
-        node: true,
         // Typed env is on by convention: ./env.ts is probed automatically.
         // (Set `env: false` here to opt out.)
       },
@@ -33,6 +31,7 @@ export default defineConfig({
     // `httpMethods` also scans route modules for GET/POST/... exports (API
     // routes); handler modules never enter the client bundle.
     fileRoutes({ httpMethods: true, types: true }),
+    nitro({ prerender: { routes: ['/about'] } }),
   ],
   server: {
     port: 3000,
