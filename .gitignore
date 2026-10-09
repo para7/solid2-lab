@@ -26,3 +26,13 @@ gitignore
 # System Files
 .DS_Store
 Thumbs.db
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
