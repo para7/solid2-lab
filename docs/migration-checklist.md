@@ -3,26 +3,44 @@
 room.nanaket.dev（SvelteKit 2 / Svelte 5 / Cloudflare Workers）を Solid 2 に移せるかを検証する。
 本番が使っている機能を洗い出し、このリポジトリで確認できたものから埋めていく。
 
+> [!WARNING]
+> 確認用のコード（`src/server/cf.ts`、`src/lib/cf.ts`、`src/routes/cf.tsx`、`src/routes/api/cf.ts`）は認証なしで R2 への書き込み・任意のキーの読み出し・メール送信ができる。デプロイする前に必ず消すこと。
+
 ## 検証済み
 
-Nitro（Node）上での確認。Cloudflare 上ではまだ確認していない。
+Nitro（Node）上で確認した。workerd 上で確かめたのは、ストリーミング SSR、`query()`、middleware・API ルート、静的ルートのプリレンダだけ（1 節を参照）。
 
 - [x] ストリーミング SSR
 - [x] `'use server'` + `query()` によるデータ取得、single-flight mutation
 - [x] 署名付き Cookie のセッション（`src/server/session.ts`）
 - [x] 型付き env（`env.ts`）
 - [x] middleware、API ルート（`src/routes/api`）
-- [x] 静的ルートのプリレンダ（`/about`、Nitro の `prerender.routes`）
+- [x] 静的ルートのプリレンダ（`/about`。今は `scripts/prerender.ts`）
 - [x] `createOptimisticStore` + `action` による楽観的更新（`src/routes/action`）
 
 ## 優先度：高（移行の可否を左右する）
 
 ### 1. Cloudflare Workers での実行
 
-- [ ] `@cloudflare/vite-plugin` と solid を組み合わせ、dev が workerd で動く
-- [ ] server function / middleware から D1・R2・`send_email` のバインディングを取れる（`cloudflare:workers` の `env` か `nativeEvent` 経由か）
-- [ ] `ctx.waitUntil` が使える（本番ではログイン通知メールの送信に使っている）
-- [ ] Nitro を外したとき、プリレンダを Cloudflare プラグインと同居させられる
+ローカル（`vite` dev、`vite preview`、`wrangler dev -c dist/server/wrangler.json`。いずれも workerd + miniflare）で確認した。実デプロイは未確認。確認用のコードは `src/server/cf.ts`、`/cf`、`/api/cf`（冒頭の警告を参照）。
+
+- [x] `@cloudflare/vite-plugin` と solid を組み合わせ、dev が workerd で動く
+  - `cloudflare({ viteEnvironment: { name: 'ssr' } })` で Solid の `ssr` 環境をそのまま渡せる。`build` の順序も Solid 側が client 先行に揃える
+  - `wrangler.jsonc` の `main` は `virtual:solid-ssr-handler` を直接指せばよく、自前のエントリは要らない。scheduled や email のハンドラが要るときだけ書く
+- [x] server function / middleware から D1・R2・`send_email` のバインディングを取れる
+  - `cloudflare:workers` の `env` で、API ルート（middleware）、SSR 中の `query`、JS 無しの form POST・fetch からの `action` のどれからも読める
+  - 自前のエントリから `handleRequest(request, { event: { nativeEvent: { env, ctx } } })` で渡しても読めた。ただし `nativeEvent` にはプラットフォームの生のリクエストを入れるのが慣例で、型も合わないので採らない
+- [x] `ctx.waitUntil` が使える
+  - `cloudflare:workers` の `waitUntil` で、レスポンス後に R2 への書き込みが完了した
+- [x] Nitro を外したとき、プリレンダを Cloudflare プラグインと同居させられる
+  - どちらのプラグインも SSR ページのプリレンダ機能を持たない（Cloudflare の `experimental.prerenderWorker` はフレームワークから呼ぶ前提）
+  - `vite build` の後に Vite の `preview()` で workerd 上の本番ハンドラを起動し、HTML を取って `dist/client` に書くスクリプトで足りた（`scripts/prerender.ts`）。ビルド時もバインディングを使えるが、読むのはローカルの miniflare の状態（`.wrangler/state`）で、本番の D1 ではない
+  - `/about/index.html` だとアセット層の既定（`html_handling: auto-trailing-slash`）で `/about/` にリダイレクトされるので、`/about.html` として書く
+  - 焼いたページは Worker を通らずアセット層から返る（2 の最後の項目もこれで確認できたことになる）
+- 気づいた点
+  - `wrangler types` が `.env` の `SESSION_SECRET` を必須の `ProcessEnv` として生成するため、`session.test.ts` の `delete process.env.SESSION_SECRET` が tsc でエラーになる（vitest は通る）
+  - `.env` は dev 時に secrets として読まれ、ビルドすると `dist/server/.dev.vars` にコピーされる
+  - `src/server/db.ts` の in-memory の Map は isolate ごとに別の状態になる。Nitro（単一プロセス）と違い、更新が他のリクエストから見えないことや、消えることがある
 
 ### 2. DB の内容から決まるプリレンダ
 
@@ -32,7 +50,7 @@ Nitro（Node）上での確認。Cloudflare 上ではまだ確認していない
 - [ ] クロールを無効にし、列挙したルートだけを焼ける
 - [ ] 列挙が 0 件のルートがあってもビルドを通せる
 - [ ] better-sqlite3 など Node 専用のモジュールが Worker のバンドルに入らない
-- [ ] プリレンダしたページを、Worker を通さずアセット層から配信できる
+- [x] プリレンダしたページを、Worker を通さずアセット層から配信できる（1 を参照）
 
 ### 3. JS を出さない公開ページ
 

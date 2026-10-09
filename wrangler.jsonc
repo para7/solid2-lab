@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "solid2",
+  "main": "virtual:solid-ssr-handler",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [{ "binding": "DB", "database_name": "solid2", "database_id": "local" }],
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "solid2" }],
+  "send_email": [{ "name": "EMAIL" }]
+}

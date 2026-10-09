@@ -2,13 +2,13 @@ import { fileURLToPath } from 'node:url';
 import { fileRoutes } from 'filesystem-routing/vite';
 import { defineConfig } from 'vitest/config';
 import solid from '@solidjs/vite-plugin';
-import { nitro } from 'nitro/vite';
+import { cloudflare } from '@cloudflare/vite-plugin';
 
 export default defineConfig({
   // Turnkey streaming SSR: no index.html and no entry files — the plugin
   // generates the entries around src/App.tsx, wrapped in src/Document.tsx.
-  // Nitro wraps the plugin's request handler: `vite build` emits .output/
-  // (`npm start` runs .output/server/index.mjs) and prerenders listed routes.
+  // The Cloudflare plugin runs the server side in workerd;
+  // `pnpm build` also prerenders listed routes via scripts/prerender.ts.
   plugins: [
     solid({
       start: {
@@ -31,7 +31,7 @@ export default defineConfig({
     // `httpMethods` also scans route modules for GET/POST/... exports (API
     // routes); handler modules never enter the client bundle.
     fileRoutes({ httpMethods: true, types: true }),
-    nitro({ prerender: { routes: ['/about'] } }),
+    cloudflare({ viteEnvironment: { name: 'ssr' } }),
   ],
   server: {
     port: 3000,

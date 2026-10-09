@@ -12,3 +12,7 @@ minimumReleaseAgeExclude:
   - solid-js
   - '@solidjs/*'
   - filesystem-routing
+
+allowBuilds:
+  esbuild: true
+  workerd: true
