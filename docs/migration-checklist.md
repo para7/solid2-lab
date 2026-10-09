@@ -74,9 +74,27 @@ Nitro（Node）上で確認した。workerd 上で確かめたのは、ストリ
 
 本番は SvelteKit の `csp.mode: "auto"` で、SSR には nonce、プリレンダには hash の meta を出している。
 
-- [ ] SSR が出すインラインスクリプト（シリアライズされたデータ）に nonce を付けられる
-- [ ] プリレンダしたページで、hash を使った CSP を出せる
-- [ ] `script-src 'self'` だけの設定を保てる
+`@solidjs/vite-plugin` 3.0.0-next.48 で、生成エントリのまま確認した。ローカル（`vite` dev と `wrangler dev -c dist/server/wrangler.json`）で、curl でヘッダと HTML を、Playwright（Chromium）で違反の有無とハイドレーションを確かめた。実デプロイは未確認。
+
+- [x] SSR が出すインラインスクリプト（シリアライズされたデータ）に nonce を付けられる
+  - 経緯：next.47 では、生成エントリが `renderToStream(..., { manifest })` しか呼ばず、nonce を渡す経路が無かった（solidjs/solid-vite-plugin#388）。自前のエントリを書けば付けられたが、next.48（#401、2026-10-08）で解消したので、生成エントリのまま進めた
+  - middleware（`src/middleware.ts`）で、`next()` の前に `event.nonce` を書き、`next()` の後に CSP ヘッダを付ける。インラインスクリプト・エントリの `<script>`・`modulepreload` のすべてに、ヘッダと同じ nonce が付いた。dev 用のインラインスクリプトとスタイルにも付くので、dev でも同じ CSP を付けられる
+  - ブラウザで、ハイドレーション（カウンター）、クライアント側の遷移（server function の呼び出しを含む）、ログインの action が、dev とビルド成果物の両方で CSP 違反なしで動いた。nonce の無いインラインスクリプトを差し込むと、ブロックされた
+  - シェルを送った後にリダイレクトしたときのスクリプトにも nonce が付く（`createSSRResponse` に event の nonce が渡る。ソースで読んだだけで、動かしてはいない）
+- [x] プリレンダしたページで、hash を使った CSP を出せる
+  - `scripts/prerender.ts` で、Worker が返した HTML から nonce 属性を消し、インラインスクリプトの sha256 を計算し、CSP ヘッダの `'nonce-…'` を hash に置き換えて `<meta>` で書き込む。`<meta>` では効かない `frame-ancestors` は外す
+  - CSP ヘッダに nonce が無いときや、`<head>` に `<script>` が無いときは、CSP の無いページを書き出さないよう、ビルドを失敗させる
+  - `<meta>` を `<head>` の直後に置くと、エラーも出さずにハイドレーションが壊れる（クライアント側の遷移がフルリロードになる。next.47 で確認）。ハイドレーションが `<head>` の子を位置で照合するため。最初の `<script>` の直前に置いている
+  - アセット層から返るので CSP ヘッダは付かず、`<meta>` だけが効く。`/about` から読み込んでも、ハイドレーションとクライアント側の遷移が動き、差し込んだインラインスクリプトはブロックされた
+- [x] `script-src 'self'` だけの設定を保てる
+  - nonce と hash のほかに足したものは無い。クライアントのバンドルに `eval` や `new Function` は無く、`'unsafe-eval'` は要らない（next.48 のビルドで確認）
+  - 方針は本番に揃えた（`default-src 'self'`、`style-src 'self' 'unsafe-inline'`、`frame-ancestors 'none'` など）。本番にある外部のホスト（`images.nanaket.dev`、`frame-src` の埋め込み先）は、ここでは足していない
+- 制約
+  - next.48 で middleware の形が `(request, next)` から `(event, next)` に変わり、`next()` は引数を取らなくなった。`filesystem-routing` 0.4.0 の `createAPIHandler` は `(request, next)` のままなので、`(event, next) => api(event.request, next)` でつないだ（上流に issue・PR は見当たらない。2026-10-09 時点）
+  - CSP ヘッダは `text/html` の応答にだけ付ける。ヘッダを変更できない応答（`fetch()` や `env.ASSETS.fetch()` の応答）を HTML のまま middleware に返すと、`headers.set` が TypeError になる見込み。今は該当する箇所が無い（未確認）
+  - プリレンダしたページの `frame-ancestors` は、本番と同じく `_headers` で補う必要がある（14 を参照）
+- 気づいた点
+  - プリレンダしたページには、nonce を消した `<meta property="csp-nonce">` が残る。Vite のクライアントが nonce を読むための目印で、空でも支障は無かった
 
 ## 優先度：中（書き方は変わるが、移行はできそうなもの）
 
